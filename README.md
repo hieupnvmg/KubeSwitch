@@ -21,13 +21,21 @@ Bấm **Hủy quét** trong cửa sổ hoặc menu bar để dừng và giữ l�
 
 App ghi nhớ thư mục đã chọn. Bấm biểu tượng ⎈ trên menu bar → chọn kubeconfig → chọn context để kích hoạt trực tiếp, không cần mở cửa sổ. Menu bar cũng có nút chọn thư mục, quét lại và mở cửa sổ. Sau khi kích hoạt, tên context xuất hiện trên menu bar; đây là lần chọn gần nhất trong app, không tự theo dõi thay đổi từ công cụ khác.
 
+## Cập nhật OTA (từ 1.2.0)
+
+Bấm **Kiểm tra cập nhật…** ở cuối cửa sổ hoặc trong menu bar. Nếu có bản mới, Sparkle sẽ cho tải và **Install and Relaunch** để thay app và mở lại. Không cần tải DMG mỗi lần. Có thể cần xác thực của macOS nếu thư mục cài đặt yêu cầu quyền ghi.
+
+Mặc định app tự kiểm tra khoảng mỗi 24 giờ, nhưng vẫn yêu cầu người dùng chọn cài đặt. Bật/tắt **Tự kiểm tra cập nhật** trong menu bar. App dùng feed và file ZIP từ GitHub qua HTTPS; cả feed và file cập nhật đều được kiểm tra chữ ký Ed25519 trước khi xử lý.
+
+**Bản 1.1.0 trở về trước chưa có updater:** tải DMG 1.2.0 và thay app trong Applications một lần. Những lần sau cập nhật trong app. Chạy app đã cài trong Applications, thay vì chạy từ ổ DMG chỉ đọc.
+
 ## Cách chuyển cấu hình
 
 App sao chép nội dung kubeconfig, đặt current-context, chuyển đường dẫn chứng chỉ/key/tokenFile tương đối thành tuyệt đối rồi ghi ~/.kube/config. File nguồn được giữ nguyên, trừ khi bạn chọn chính ~/.kube/config. File đích được thay thế bằng file thường nếu trước đó là symlink.
 
 Mỗi lần chuyển, cấu hình cũ được sao lưu ở ~/.kube/config.kubeswitch-backup-<UUID>. Đường dẫn bản sao lưu xuất hiện trong app. Có thể khôi phục bằng cách chép bản sao lưu đè lên ~/.kube/config. Các file được ghi với quyền 600.
 
-App đọc cấu hình trên máy, không gọi cluster, không thực thi plugin xác thực và không gửi dữ liệu qua mạng. Khi dùng kubectl sau đó, kubectl có thể chạy plugin xác thực do kubeconfig chỉ định.
+App đọc cấu hình trên máy, không gọi cluster, không thực thi plugin xác thực và không tải kubeconfig lên mạng. Phần cập nhật có kết nối GitHub để đọc feed và tải phiên bản mới. Khi dùng kubectl sau đó, kubectl có thể chạy plugin xác thực do kubeconfig chỉ định.
 
 Quét theo từng cấp, ưu tiên tên file có kube/config hoặc đuôi YAML trong mỗi thư mục. Bỏ qua thư mục ẩn trừ .kube, Library, Applications, node_modules, vendor và Pods; bỏ qua symlink, bản sao lưu do app tạo, các đuôi file nhị phân phổ biến và file lớn hơn 2 MB. Đọc nội dung file còn lại trong giới hạn 2 MB, nên nhận được cả kubeconfig có clusters/contexts nằm sau 8 KB đầu. Dùng Ruby có sẵn tại /usr/bin/ruby để đọc YAML an toàn; YAML có alias hoặc kiểu dữ liệu đặc biệt sẽ bị bỏ qua.
 
@@ -43,4 +51,17 @@ bash build.sh
 
 Cần macOS và Xcode Command Line Tools. Script tạo app, ký ad-hoc và đóng gói DMG/ZIP trong dist/.
 
+Build tải Sparkle 2.10.1 từ bản phát hành chính thức và kiểm tra SHA-256 đã ghim trước khi giải nén. Giấy phép Sparkle được đóng kèm trong Resources của app. Tài liệu: [Sparkle](https://sparkle-project.org/documentation/).
+
 Kiểm tra cơ chế quét bằng `python3 -m unittest -v test_scan.py` (cần Python 3). Bộ kiểm tra bao gồm giới hạn độ sâu, thư mục/file bị loại, YAML có trường nằm sau 8 KB đầu, tên Unicode, kết quả dạng stream, dừng tiến trình và lỗi thư mục không tồn tại.
+
+## Phát hành bản cập nhật
+
+1. Tăng cả CFBundleVersion (số build) và CFBundleShortVersionString trong Info.plist.
+2. Chạy `bash prepare-update.sh`. Script build app và tạo appcast.xml có chữ ký. Cần khóa ký gốc trong login Keychain, account `hieupnvmg.KubeSwitch`. Script kiểm tra public key khớp Info.plist trước khi ký.
+3. Commit/push mã nguồn (chưa push feed), tạo GitHub Release `v<version>` và tải `dist/KubeSwitch-macOS.zip` cùng DMG lên release đó. ZIP phải là chính file đã ký, không được build/đóng gói lại sau khi tạo feed.
+4. Sau khi asset tồn tại, commit/push appcast.xml lên main. Không sửa tay file này sau khi ký. Có thể đính kèm appcast.xml vào release để tham khảo, nhưng updater lấy feed từ main.
+
+Khóa riêng nằm trong Keychain, không nằm trong repository. Người giữ khóa cần sao lưu an toàn bằng công cụ `generate_keys --account hieupnvmg.KubeSwitch -x <file-private>` rồi lưu bản xuất ở nơi bảo mật; không commit file xuất. Mất khóa có thể buộc người dùng cài lại thủ công vì bản phân phối hiện tại chưa có Developer ID để hỗ trợ xoay khóa.
+
+Sau khi tạo feed, chạy `python3 test_updates.py`: một app kiểm tra tạm thời dùng chính API Sparkle xác nhận nhận được bản mới, từ chối feed bị sửa và từ chối archive bị sửa. Kiểm tra này không cài app hay sửa kubeconfig; nó không mô phỏng bước cài đặt và mở lại trên máy người dùng.

@@ -1,4 +1,5 @@
 import Cocoa
+import Sparkle
 
 struct Config: Decodable {
     let path: String
@@ -30,6 +31,9 @@ final class App: NSObject, NSApplicationDelegate, NSTableViewDataSource, NSTable
     let depth = NSPopUpButton()
     let cancel = NSButton(title: "Hủy quét", target: nil, action: nil)
     let spinner = NSProgressIndicator()
+    let updateButton = NSButton(title: "Kiểm tra cập nhật…", target: nil, action: nil)
+    var updaterController: SPUStandardUpdaterController!
+    var updaterObservation: NSKeyValueObservation?
     var scanProcess: Process?
     var scanCancelled = false
     var scanChecked = 0
@@ -42,10 +46,10 @@ final class App: NSObject, NSApplicationDelegate, NSTableViewDataSource, NSTable
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
-        window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 960, height: 620), styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView], backing: .buffered, defer: false)
+        window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 960, height: 680), styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView], backing: .buffered, defer: false)
         window.title = "KubeSwitch"
         window.titlebarAppearsTransparent = true
-        window.minSize = NSSize(width: 860, height: 620)
+        window.minSize = NSSize(width: 860, height: 680)
         window.center()
         window.isReleasedWhenClosed = false
         window.backgroundColor = .windowBackgroundColor
@@ -113,7 +117,13 @@ final class App: NSObject, NSApplicationDelegate, NSTableViewDataSource, NSTable
         status.font = .systemFont(ofSize: 11); status.textColor = .secondaryLabelColor
         status.maximumNumberOfLines = 2; status.lineBreakMode = .byTruncatingMiddle
         status.isSelectable = true
-        let stack = NSStackView(views: [header, folderLabel, scanOptions, body, activity, status, footnote])
+        updateButton.target = self; updateButton.action = #selector(checkForUpdates)
+        updateButton.bezelStyle = .rounded; updateButton.controlSize = .small
+        updateButton.image = NSImage(systemSymbolName: "arrow.down.circle", accessibilityDescription: nil)
+        let version = NSTextField(labelWithString: "v" + (Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""))
+        version.font = .systemFont(ofSize: 11); version.textColor = .secondaryLabelColor
+        let footer = NSStackView(views: [version, NSView(), updateButton]); footer.spacing = 12
+        let stack = NSStackView(views: [header, folderLabel, scanOptions, body, activity, status, footnote, footer])
         stack.orientation = .vertical; stack.alignment = .leading; stack.spacing = 12
         stack.translatesAutoresizingMaskIntoConstraints = false
         window.contentView!.addSubview(stack)
@@ -127,6 +137,7 @@ final class App: NSObject, NSApplicationDelegate, NSTableViewDataSource, NSTable
             folderLabel.widthAnchor.constraint(equalTo: stack.widthAnchor),
             footnote.widthAnchor.constraint(equalTo: stack.widthAnchor),
             status.widthAnchor.constraint(equalTo: stack.widthAnchor),
+            footer.widthAnchor.constraint(equalTo: stack.widthAnchor),
             body.heightAnchor.constraint(greaterThanOrEqualToConstant: 300),
             leftCard.widthAnchor.constraint(equalTo: body.widthAnchor, multiplier: 0.53),
             rightCard.heightAnchor.constraint(equalTo: leftCard.heightAnchor),
@@ -147,11 +158,25 @@ final class App: NSObject, NSApplicationDelegate, NSTableViewDataSource, NSTable
         menu.addItem(withTitle: "Thoát", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         menu.delegate = self
         statusItem.menu = menu
+        updaterController = SPUStandardUpdaterController(startingUpdater: false, updaterDelegate: nil, userDriverDelegate: nil)
+        updaterController.startUpdater()
+        updaterObservation = updaterController.updater.observe(\.canCheckForUpdates, options: [.initial, .new]) { [weak self] updater, _ in
+            let enabled = updater.canCheckForUpdates
+            DispatchQueue.main.async { self?.updateButton.isEnabled = enabled }
+        }
         rebuildMenu()
         showWindow()
         if let saved = UserDefaults.standard.string(forKey: "scanFolder") {
             folder = saved; rescan()
         }
+    }
+    @objc func checkForUpdates() {
+        guard updaterController.updater.canCheckForUpdates else { return }
+        NSApp.activate(ignoringOtherApps: true)
+        updaterController.checkForUpdates(nil)
+    }
+    @objc func toggleAutomaticUpdates() {
+        updaterController.updater.automaticallyChecksForUpdates.toggle()
     }
     func card(_ content: NSView) -> NSView {
         let view = NSView(); view.wantsLayer = true
@@ -209,6 +234,12 @@ final class App: NSObject, NSApplicationDelegate, NSTableViewDataSource, NSTable
             menu.addItem(withTitle: "Hủy quét", action: #selector(cancelScan), keyEquivalent: "").target = self
         }
         menu.addItem(withTitle: "Mở cửa sổ KubeSwitch", action: #selector(showWindow), keyEquivalent: "").target = self
+        menu.addItem(.separator())
+        let updates = menu.addItem(withTitle: "Kiểm tra cập nhật…", action: #selector(checkForUpdates), keyEquivalent: "")
+        updates.target = self; updates.isEnabled = updaterController.updater.canCheckForUpdates
+        updates.image = NSImage(systemSymbolName: "arrow.down.circle", accessibilityDescription: nil)
+        let automatic = menu.addItem(withTitle: "Tự kiểm tra cập nhật", action: #selector(toggleAutomaticUpdates), keyEquivalent: "")
+        automatic.target = self; automatic.state = updaterController.updater.automaticallyChecksForUpdates ? .on : .off
         menu.addItem(.separator())
         menu.addItem(withTitle: "Thoát", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         menu.autoenablesItems = false
