@@ -23,6 +23,7 @@ final class App: NSObject, NSApplicationDelegate, NSTableViewDataSource, NSTable
     let status = NSTextField(wrappingLabelWithString: "")
     let context = NSPopUpButton()
     let activate = NSButton(title: "Kích hoạt context", target: nil, action: nil)
+    let k9sButton = NSButton(title: "Mở k9s", target: nil, action: nil)
     let scan = NSButton(title: "Quét lại", target: nil, action: nil)
     let depth = NSPopUpButton()
     let cancel = NSButton(title: "Hủy quét", target: nil, action: nil)
@@ -61,6 +62,11 @@ final class App: NSObject, NSApplicationDelegate, NSTableViewDataSource, NSTable
         activate.controlSize = .large
         activate.image = NSImage(systemSymbolName: "checkmark.circle.fill", accessibilityDescription: nil)
         activate.imagePosition = .imageLeading
+        k9sButton.target = self; k9sButton.action = #selector(openSelectedK9s)
+        k9sButton.bezelStyle = .rounded; k9sButton.controlSize = .large
+        k9sButton.image = NSImage(systemSymbolName: "terminal", accessibilityDescription: nil)
+        k9sButton.imagePosition = .imageLeading; k9sButton.isEnabled = false
+        k9sButton.toolTip = "Mở Terminal chạy k9s với file và context đang chọn"
         let icon = NSImageView(image: NSImage(systemSymbolName: "helm", accessibilityDescription: "KubeSwitch") ?? NSImage(systemSymbolName: "server.rack", accessibilityDescription: nil)!)
         icon.contentTintColor = .controlAccentColor
         icon.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 34, weight: .medium)
@@ -109,8 +115,8 @@ final class App: NSObject, NSApplicationDelegate, NSTableViewDataSource, NSTable
         let divider = NSBox(); divider.boxType = .separator
         let help = NSTextField(wrappingLabelWithString: "Cấu hình cũ được tự động sao lưu khi chuyển. Bạn cũng có thể chọn nhanh từ biểu tượng trên menu bar.")
         help.font = .systemFont(ofSize: 12); help.textColor = .secondaryLabelColor
-        let right = NSStackView(views: [selectedName, selectedPath, divider, contextLabel, context, activate, help, NSView()])
-        right.orientation = .vertical; right.alignment = .leading; right.spacing = 16
+        let right = NSStackView(views: [selectedName, selectedPath, divider, contextLabel, context, activate, k9sButton, help, NSView()])
+        right.orientation = .vertical; right.alignment = .leading; right.spacing = 12
         let leftCard = card(left); let rightCard = card(right)
         let body = NSStackView(views: [leftCard, rightCard]); body.spacing = 16; body.alignment = .top
         let footnote = NSTextField(wrappingLabelWithString: "Đích: ~/.kube/config  ·  Nếu terminal đặt KUBECONFIG, chạy unset KUBECONFIG.")
@@ -223,7 +229,7 @@ final class App: NSObject, NSApplicationDelegate, NSTableViewDataSource, NSTable
                 context.selectItem(withTitle: previousContext)
             }
         } else {
-            context.removeAllItems(); activate.isEnabled = false
+            context.removeAllItems(); activate.isEnabled = false; k9sButton.isEnabled = false
             selectedName.stringValue = configs.isEmpty ? "Chưa có kubeconfig" : "Không có kết quả"
             selectedPath.stringValue = configs.isEmpty ? "Chọn thư mục để bắt đầu quét." : "Thử từ khóa khác hoặc xóa nội dung tìm kiếm."
         }
@@ -260,6 +266,16 @@ final class App: NSObject, NSApplicationDelegate, NSTableViewDataSource, NSTable
                 item.state = config.path == lastActivatedPath && name == lastActivatedContext ? .on : .off
                 submenu.addItem(item)
             }
+            submenu.addItem(.separator())
+            let k9sItem = NSMenuItem(title: "Mở bằng k9s", action: nil, keyEquivalent: "")
+            k9sItem.image = NSImage(systemSymbolName: "terminal", accessibilityDescription: nil)
+            let k9sContexts = NSMenu(); k9sContexts.autoenablesItems = false
+            for name in config.contexts {
+                let launch = NSMenuItem(title: name, action: #selector(openK9sFromMenu(_:)), keyEquivalent: "")
+                launch.target = self; launch.representedObject = ["path": config.path, "context": name]
+                launch.isEnabled = !busy; k9sContexts.addItem(launch)
+            }
+            k9sItem.submenu = k9sContexts; submenu.addItem(k9sItem)
             fileItem.submenu = submenu
             menu.addItem(fileItem)
         }
@@ -290,6 +306,47 @@ final class App: NSObject, NSApplicationDelegate, NSTableViewDataSource, NSTable
         guard !busy, let selection = sender.representedObject as? [String: String],
               let path = selection["path"], let name = selection["context"] else { return }
         activateConfig(path: path, selected: name)
+    }
+    @objc func openK9sFromMenu(_ sender: NSMenuItem) {
+        guard !busy, let selection = sender.representedObject as? [String: String],
+              let path = selection["path"], let name = selection["context"] else { return }
+        openK9s(path: path, selected: name)
+    }
+    @objc func openSelectedK9s() {
+        let row = table.selectedRow
+        guard !busy, visibleConfigs.indices.contains(row), let name = context.titleOfSelectedItem else { return }
+        openK9s(path: visibleConfigs[row].path, selected: name)
+    }
+    func openK9s(path: String, selected: String) {
+        do {
+            let fm = FileManager.default
+            guard fm.isReadableFile(atPath: path) else {
+                throw NSError(domain: "KubeSwitch", code: 2, userInfo: [NSLocalizedDescriptionKey: "Không đọc được kubeconfig đã chọn. Hãy quét lại hoặc kiểm tra quyền truy cập."])
+            }
+            let launchers = try fm.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
+                .appendingPathComponent("KubeSwitch/Launchers", isDirectory: true)
+            try fm.createDirectory(at: launchers, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+            let script = launchers.appendingPathComponent(UUID().uuidString + ".command")
+            try K9sLaunch.script(kubeconfig: path, context: selected).write(to: script, atomically: true, encoding: .utf8)
+            try fm.setAttributes([.posixPermissions: 0o700], ofItemAtPath: script.path)
+            let terminal = URL(fileURLWithPath: "/System/Applications/Utilities/Terminal.app")
+            let configuration = NSWorkspace.OpenConfiguration(); configuration.activates = true
+            NSWorkspace.shared.open([script], withApplicationAt: terminal, configuration: configuration) { _, error in
+                DispatchQueue.main.async {
+                    if let error = error {
+                        try? fm.removeItem(at: script)
+                        self.status.stringValue = "Không mở được Terminal: \(error.localizedDescription)"
+                        self.showWindow()
+                    } else {
+                        self.status.stringValue = "Đã mở Terminal cho k9s · \(selected)"
+                    }
+                }
+            }
+        } catch {
+            showWindow()
+            let alert = NSAlert(); alert.messageText = "Không mở được k9s"
+            alert.informativeText = error.localizedDescription; alert.runModal()
+        }
     }
     @objc func showWindow() { window.makeKeyAndOrderFront(nil); NSApp.activate(ignoringOtherApps: true) }
     @objc func chooseFolder() {
@@ -328,7 +385,7 @@ final class App: NSObject, NSApplicationDelegate, NSTableViewDataSource, NSTable
     }
     @objc func rescan() {
         guard let folder = folder, !busy else { return }
-        busy = true; scan.isEnabled = false; activate.isEnabled = false
+        busy = true; scan.isEnabled = false; activate.isEnabled = false; k9sButton.isEnabled = false
         depth.isEnabled = false; cancel.isHidden = false; cancel.isEnabled = true
         spinner.startAnimation(nil)
         scanCancelled = false; scanChecked = 0; scanSkipped = 0
@@ -384,6 +441,7 @@ final class App: NSObject, NSApplicationDelegate, NSTableViewDataSource, NSTable
         busy = false; scanProcess = nil; scan.isEnabled = true; depth.isEnabled = true
         cancel.isHidden = true; spinner.stopAnimation(nil)
         activate.isEnabled = visibleConfigs.indices.contains(table.selectedRow)
+        k9sButton.isEnabled = activate.isEnabled
         let summary = "\(scanChecked) file · \(configs.count) kubeconfig · bỏ qua \(scanSkipped) mục"
         activity.stringValue = (scanCancelled ? "Đã hủy · " : success ? "Hoàn tất · " : "Quét thất bại · ") + summary
         activity.textColor = success || scanCancelled ? .secondaryLabelColor : .systemRed
@@ -421,12 +479,13 @@ final class App: NSObject, NSApplicationDelegate, NSTableViewDataSource, NSTable
     func tableViewSelectionDidChange(_ notification: Notification) {
         context.removeAllItems()
         let row = table.selectedRow
-        guard visibleConfigs.indices.contains(row) else { activate.isEnabled = false; return }
+        guard visibleConfigs.indices.contains(row) else { activate.isEnabled = false; k9sButton.isEnabled = false; return }
         let item = visibleConfigs[row]; context.addItems(withTitles: item.contexts)
         selectedName.stringValue = URL(fileURLWithPath: item.path).lastPathComponent
         selectedPath.stringValue = item.path
         if let current = item.current, item.contexts.contains(current) { context.selectItem(withTitle: current) }
         activate.isEnabled = !busy
+        k9sButton.isEnabled = !busy
     }
     @objc func applyConfig() {
         let row = table.selectedRow

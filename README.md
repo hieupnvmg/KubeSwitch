@@ -19,6 +19,16 @@ Trong menu bar, chọn **Tìm kiếm…** để mở cửa sổ và đưa con tr
 
 Kiểm tra bộ lọc: `mkdir -p dist && swiftc Search.swift tests/SearchTests.swift -o dist/SearchTests && dist/SearchTests`.
 
+## Mở k9s (từ 1.4.0)
+
+Chọn kubeconfig và context trong cửa sổ rồi bấm **Mở k9s**. Hoặc trên menu bar, chọn file → **Mở bằng k9s** → context. Không cần bấm Kích hoạt context trước.
+
+App mở Terminal của macOS và chạy `k9s --kubeconfig='<file đã chọn>' --context='<context đã chọn>'`. Hai tham số được truyền nguyên vẹn, kể cả khi chứa dấu hoặc ký tự đặc biệt. Thư mục làm việc là thư mục chứa kubeconfig để hỗ trợ các công cụ xác thực dùng đường dẫn tương đối. App không thay ~/.kube/config khi mở k9s; phiên k9s hoạt động theo quyền của kubeconfig đã chọn.
+
+Cần cài k9s riêng. Nếu Terminal không tìm thấy k9s, nó hiện gợi ý `brew install k9s`. PATH kế thừa từ Terminal, đồng thời bổ sung /opt/homebrew/bin và /usr/local/bin. Công cụ xác thực cluster (nếu có) cũng cần dùng được trong môi trường Terminal. Script khởi chạy tạm có quyền 700, không chứa nội dung/token của kubeconfig, và tự xóa khi chạy.
+
+Tham khảo [lệnh k9s](https://k9scli.io/topics/commands/). Kiểm tra truyền tham số và nhánh thiếu k9s bằng `python3 -m unittest -v test_k9s.py`; bài kiểm tra dùng k9s giả, không kết nối cluster.
+
 ## Quét thư mục
 
 Mặc định quét file trong thư mục đã chọn và tối đa **3 cấp thư mục con**. Có thể chọn 1 cấp, 3 cấp, 6 cấp hoặc không giới hạn; bấm **Quét lại** để áp dụng. App ghi nhớ lựa chọn này.

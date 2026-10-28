@@ -18,7 +18,7 @@ cp config.rb "$APP/Contents/Resources/config.rb"
 cp .dependencies/LICENSE "$APP/Contents/Resources/Sparkle-LICENSE.txt"
 rm -rf "$APP/Contents/Frameworks/Sparkle.framework"
 ditto .dependencies/Sparkle.framework "$APP/Contents/Frameworks/Sparkle.framework"
-swiftc -swift-version 5 -O -target arm64-apple-macosx13.0 main.swift Search.swift -o "$APP/Contents/MacOS/KubeSwitch" -framework Cocoa -F .dependencies -framework Sparkle -Xlinker -rpath -Xlinker @executable_path/../Frameworks
+swiftc -swift-version 5 -O -target arm64-apple-macosx13.0 main.swift Search.swift K9sLaunch.swift -o "$APP/Contents/MacOS/KubeSwitch" -framework Cocoa -F .dependencies -framework Sparkle -Xlinker -rpath -Xlinker @executable_path/../Frameworks
 # Preserve Sparkle's signed helper services; sign only our outer application.
 codesign --force --sign - "$APP"
 codesign --verify --deep --strict "$APP"
