@@ -1,12 +1,6 @@
 import Cocoa
 import Sparkle
 
-struct Config: Decodable {
-    let path: String
-    let contexts: [String]
-    let current: String?
-}
-
 struct ScanEvent: Decodable {
     let type: String
     let config: Config?
@@ -19,6 +13,8 @@ final class App: NSObject, NSApplicationDelegate, NSTableViewDataSource, NSTable
     var window: NSWindow!
     var statusItem: NSStatusItem!
     let table = NSTableView()
+    let search = NSSearchField()
+    var visibleConfigs: [Config] = []
     let selectedName = NSTextField(labelWithString: "Chọn một kubeconfig")
     let selectedPath = NSTextField(wrappingLabelWithString: "Các context sẽ xuất hiện tại đây.")
     let fileCount = NSTextField(labelWithString: "KUBECONFIG")
@@ -87,6 +83,12 @@ final class App: NSObject, NSApplicationDelegate, NSTableViewDataSource, NSTable
         cancel.bezelStyle = .rounded
         spinner.style = .spinning; spinner.controlSize = .small; spinner.isDisplayedWhenStopped = false
         let scanOptions = NSStackView(views: [depth, spinner, cancel]); scanOptions.spacing = 10
+        search.placeholderString = "Tìm file, đường dẫn hoặc context…"
+        search.target = self; search.action = #selector(searchChanged)
+        search.sendsWholeSearchString = false
+        search.sendsSearchStringImmediately = true
+        search.controlSize = .large
+        search.setAccessibilityLabel("Tìm kubeconfig hoặc context")
         let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("path"))
         column.width = 430
         table.addTableColumn(column); table.delegate = self; table.dataSource = self
@@ -96,7 +98,7 @@ final class App: NSObject, NSApplicationDelegate, NSTableViewDataSource, NSTable
         let scroll = NSScrollView(); scroll.documentView = table; scroll.hasVerticalScroller = true
         scroll.drawsBackground = false; scroll.borderType = .noBorder
         fileCount.font = .systemFont(ofSize: 11, weight: .semibold); fileCount.textColor = .secondaryLabelColor
-        let left = NSStackView(views: [fileCount, scroll]); left.orientation = .vertical; left.alignment = .leading; left.spacing = 12
+        let left = NSStackView(views: [fileCount, search, scroll]); left.orientation = .vertical; left.alignment = .leading; left.spacing = 12
         selectedName.font = .systemFont(ofSize: 20, weight: .semibold)
         selectedName.lineBreakMode = .byTruncatingMiddle
         selectedPath.font = .systemFont(ofSize: 11); selectedPath.textColor = .secondaryLabelColor
@@ -143,6 +145,7 @@ final class App: NSObject, NSApplicationDelegate, NSTableViewDataSource, NSTable
             rightCard.heightAnchor.constraint(equalTo: leftCard.heightAnchor),
             leftCard.heightAnchor.constraint(equalTo: body.heightAnchor),
             scroll.widthAnchor.constraint(equalTo: left.widthAnchor),
+            search.widthAnchor.constraint(equalTo: left.widthAnchor),
             selectedName.widthAnchor.constraint(equalTo: right.widthAnchor),
             selectedPath.widthAnchor.constraint(equalTo: right.widthAnchor),
             context.widthAnchor.constraint(equalTo: right.widthAnchor),
@@ -194,16 +197,53 @@ final class App: NSObject, NSApplicationDelegate, NSTableViewDataSource, NSTable
         ])
         return view
     }
+    @objc func clearSearch() {
+        search.stringValue = ""
+        applySearch()
+    }
+    @objc func focusSearch() {
+        showWindow()
+        window.makeFirstResponder(search)
+        search.selectText(nil)
+    }
+    @objc func searchChanged() {
+        applySearch()
+    }
+    func applySearch() {
+        let previousPath = visibleConfigs.indices.contains(table.selectedRow) ? visibleConfigs[table.selectedRow].path : nil
+        let previousContext = context.titleOfSelectedItem
+        visibleConfigs = configs.compactMap { $0.matching(search.stringValue) }
+        table.deselectAll(nil)
+        table.reloadData()
+        fileCount.stringValue = "KUBECONFIG · \(visibleConfigs.count)/\(configs.count)"
+        if !visibleConfigs.isEmpty {
+            let row = previousPath.flatMap { path in visibleConfigs.firstIndex(where: { $0.path == path }) } ?? 0
+            table.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
+            if let previousContext = previousContext, visibleConfigs[row].contexts.contains(previousContext) {
+                context.selectItem(withTitle: previousContext)
+            }
+        } else {
+            context.removeAllItems(); activate.isEnabled = false
+            selectedName.stringValue = configs.isEmpty ? "Chưa có kubeconfig" : "Không có kết quả"
+            selectedPath.stringValue = configs.isEmpty ? "Chọn thư mục để bắt đầu quét." : "Thử từ khóa khác hoặc xóa nội dung tìm kiếm."
+        }
+    }
     func menuNeedsUpdate(_ menu: NSMenu) { rebuildMenu() }
     func rebuildMenu() {
         guard let menu = statusItem.menu else { return }
         menu.removeAllItems()
         let heading = NSMenuItem(title: busy ? "Đang quét · \(scanChecked) file · \(configs.count) kubeconfig" : "Chọn kubeconfig → context", action: nil, keyEquivalent: "")
         menu.addItem(heading)
-        if configs.isEmpty {
-            menu.addItem(withTitle: "Chưa có kubeconfig — hãy chọn thư mục", action: nil, keyEquivalent: "")
+        let find = menu.addItem(withTitle: "Tìm kiếm…", action: #selector(focusSearch), keyEquivalent: "f")
+        find.target = self; find.image = NSImage(systemSymbolName: "magnifyingglass", accessibilityDescription: nil)
+        if !search.stringValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            menu.addItem(withTitle: "Bộ lọc: " + search.stringValue, action: nil, keyEquivalent: "")
+            menu.addItem(withTitle: "Xóa bộ lọc", action: #selector(clearSearch), keyEquivalent: "").target = self
         }
-        for (index, config) in configs.enumerated() {
+        if visibleConfigs.isEmpty {
+            menu.addItem(withTitle: configs.isEmpty ? "Chưa có kubeconfig — hãy chọn thư mục" : "Không có kết quả phù hợp", action: nil, keyEquivalent: "")
+        }
+        for (index, config) in visibleConfigs.enumerated() {
             let prefix = folder.map { $0.hasSuffix("/") ? $0 : $0 + "/" } ?? ""
             let label = !prefix.isEmpty && config.path.hasPrefix(prefix) ? String(config.path.dropFirst(prefix.count)) : config.path
             let fileItem = NSMenuItem(title: label, action: nil, keyEquivalent: "")
@@ -292,7 +332,7 @@ final class App: NSObject, NSApplicationDelegate, NSTableViewDataSource, NSTable
         depth.isEnabled = false; cancel.isHidden = false; cancel.isEnabled = true
         spinner.startAnimation(nil)
         scanCancelled = false; scanChecked = 0; scanSkipped = 0
-        configs = []; table.reloadData(); context.removeAllItems()
+        configs = []; applySearch()
         selectedName.stringValue = "Chọn một kubeconfig"
         selectedPath.stringValue = "Kết quả sẽ xuất hiện ngay khi tìm thấy."
         fileCount.stringValue = "KUBECONFIG · 0"
@@ -337,24 +377,22 @@ final class App: NSObject, NSApplicationDelegate, NSTableViewDataSource, NSTable
         }
         activity.stringValue = "Đã kiểm tra \(scanChecked) file · \(configs.count) kubeconfig · bỏ qua \(scanSkipped) mục"
         if added {
-            table.reloadData()
-            fileCount.stringValue = "KUBECONFIG · \(configs.count)"
-            if table.selectedRow < 0 && !configs.isEmpty { table.selectRowIndexes(IndexSet(integer: 0), byExtendingSelection: false) }
+            applySearch()
         }
     }
     func finishScan(success: Bool) {
         busy = false; scanProcess = nil; scan.isEnabled = true; depth.isEnabled = true
         cancel.isHidden = true; spinner.stopAnimation(nil)
-        activate.isEnabled = configs.indices.contains(table.selectedRow)
+        activate.isEnabled = visibleConfigs.indices.contains(table.selectedRow)
         let summary = "\(scanChecked) file · \(configs.count) kubeconfig · bỏ qua \(scanSkipped) mục"
         activity.stringValue = (scanCancelled ? "Đã hủy · " : success ? "Hoàn tất · " : "Quét thất bại · ") + summary
         activity.textColor = success || scanCancelled ? .secondaryLabelColor : .systemRed
         status.stringValue = scanCancelled ? "Giữ lại các kết quả đã tìm thấy. Bạn có thể chọn thư mục khác hoặc quét lại." : success ? "Độ sâu có giới hạn có thể bỏ qua file nằm sâu hơn. Tăng độ sâu nếu thiếu cấu hình." : "Không đọc được thư mục. Kiểm tra quyền truy cập hoặc chọn thư mục khác."
         rebuildMenu()
     }
-    func numberOfRows(in tableView: NSTableView) -> Int { configs.count }
+    func numberOfRows(in tableView: NSTableView) -> Int { visibleConfigs.count }
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
-        let config = configs[row]
+        let config = visibleConfigs[row]
         let cell = NSTableCellView()
         let icon = NSImageView(image: NSImage(systemSymbolName: "doc.text", accessibilityDescription: nil)!)
         icon.contentTintColor = .controlAccentColor
@@ -383,17 +421,17 @@ final class App: NSObject, NSApplicationDelegate, NSTableViewDataSource, NSTable
     func tableViewSelectionDidChange(_ notification: Notification) {
         context.removeAllItems()
         let row = table.selectedRow
-        guard configs.indices.contains(row) else { activate.isEnabled = false; return }
-        let item = configs[row]; context.addItems(withTitles: item.contexts)
+        guard visibleConfigs.indices.contains(row) else { activate.isEnabled = false; return }
+        let item = visibleConfigs[row]; context.addItems(withTitles: item.contexts)
         selectedName.stringValue = URL(fileURLWithPath: item.path).lastPathComponent
         selectedPath.stringValue = item.path
-        if let current = item.current { context.selectItem(withTitle: current) }
+        if let current = item.current, item.contexts.contains(current) { context.selectItem(withTitle: current) }
         activate.isEnabled = !busy
     }
     @objc func applyConfig() {
         let row = table.selectedRow
-        guard !busy, configs.indices.contains(row), let selected = context.titleOfSelectedItem else { return }
-        activateConfig(path: configs[row].path, selected: selected)
+        guard !busy, visibleConfigs.indices.contains(row), let selected = context.titleOfSelectedItem else { return }
+        activateConfig(path: visibleConfigs[row].path, selected: selected)
     }
     func activateConfig(path: String, selected: String) {
         do {

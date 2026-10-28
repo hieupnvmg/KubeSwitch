@@ -11,6 +11,14 @@ Giao diện gồm danh sách file bên trái và bảng chọn context bên ph�
 3. Chọn file trong danh sách, chọn context, bấm **Kích hoạt context**.
 4. kubectl và helm dùng ~/.kube/config sẽ sử dụng context đã chọn. Nếu terminal có biến KUBECONFIG, chạy `unset KUBECONFIG` trước.
 
+## Tìm kiếm (từ 1.3.0)
+
+Nhập vào ô **Tìm file, đường dẫn hoặc context…** ở trên danh sách để lọc ngay các kết quả đã quét. Không phân biệt chữ hoa/thường và dấu. Có thể nhập nhiều từ, ví dụ `team prod`, để tìm context prod trong đường dẫn có team. Danh sách context cũng được lọc theo từ khóa; xóa ô tìm kiếm để hiện lại tất cả.
+
+Trong menu bar, chọn **Tìm kiếm…** để mở cửa sổ và đưa con trỏ vào ô tìm kiếm. Danh sách chọn nhanh trên menu bar dùng cùng bộ lọc, có mục **Xóa bộ lọc**. Tìm kiếm hoạt động trên những file đã tìm thấy, kể cả trong lúc quét; không quét lại ổ đĩa khi gõ.
+
+Kiểm tra bộ lọc: `mkdir -p dist && swiftc Search.swift tests/SearchTests.swift -o dist/SearchTests && dist/SearchTests`.
+
 ## Quét thư mục
 
 Mặc định quét file trong thư mục đã chọn và tối đa **3 cấp thư mục con**. Có thể chọn 1 cấp, 3 cấp, 6 cấp hoặc không giới hạn; bấm **Quét lại** để áp dụng. App ghi nhớ lựa chọn này.
