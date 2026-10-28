@@ -6,6 +6,14 @@ struct Config: Decodable {
     let current: String?
 }
 
+struct ScanEvent: Decodable {
+    let type: String
+    let config: Config?
+    let checked: Int?
+    let skipped: Int?
+    let path: String?
+}
+
 final class App: NSObject, NSApplicationDelegate, NSTableViewDataSource, NSTableViewDelegate, NSMenuDelegate {
     var window: NSWindow!
     var statusItem: NSStatusItem!
@@ -19,6 +27,13 @@ final class App: NSObject, NSApplicationDelegate, NSTableViewDataSource, NSTable
     let context = NSPopUpButton()
     let activate = NSButton(title: "Kích hoạt context", target: nil, action: nil)
     let scan = NSButton(title: "Quét lại", target: nil, action: nil)
+    let depth = NSPopUpButton()
+    let cancel = NSButton(title: "Hủy quét", target: nil, action: nil)
+    let spinner = NSProgressIndicator()
+    var scanProcess: Process?
+    var scanCancelled = false
+    var scanChecked = 0
+    var scanSkipped = 0
     var configs: [Config] = []
     var folder: String?
     var busy = false
@@ -30,7 +45,7 @@ final class App: NSObject, NSApplicationDelegate, NSTableViewDataSource, NSTable
         window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 960, height: 620), styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView], backing: .buffered, defer: false)
         window.title = "KubeSwitch"
         window.titlebarAppearsTransparent = true
-        window.minSize = NSSize(width: 860, height: 560)
+        window.minSize = NSSize(width: 860, height: 620)
         window.center()
         window.isReleasedWhenClosed = false
         window.backgroundColor = .windowBackgroundColor
@@ -60,6 +75,14 @@ final class App: NSObject, NSApplicationDelegate, NSTableViewDataSource, NSTable
         folderLabel.lineBreakMode = .byTruncatingMiddle
         folderLabel.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
         folderLabel.textColor = .secondaryLabelColor
+        depth.addItems(withTitles: ["Thư mục con: 1 cấp", "Thư mục con: 3 cấp", "Thư mục con: 6 cấp", "Không giới hạn"])
+        let savedDepth = UserDefaults.standard.object(forKey: "scanDepth") as? Int ?? 1
+        depth.selectItem(at: min(max(savedDepth, 0), 3))
+        depth.target = self; depth.action = #selector(depthChanged)
+        cancel.target = self; cancel.action = #selector(cancelScan); cancel.isHidden = true
+        cancel.bezelStyle = .rounded
+        spinner.style = .spinning; spinner.controlSize = .small; spinner.isDisplayedWhenStopped = false
+        let scanOptions = NSStackView(views: [depth, spinner, cancel]); scanOptions.spacing = 10
         let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("path"))
         column.width = 430
         table.addTableColumn(column); table.delegate = self; table.dataSource = self
@@ -90,7 +113,7 @@ final class App: NSObject, NSApplicationDelegate, NSTableViewDataSource, NSTable
         status.font = .systemFont(ofSize: 11); status.textColor = .secondaryLabelColor
         status.maximumNumberOfLines = 2; status.lineBreakMode = .byTruncatingMiddle
         status.isSelectable = true
-        let stack = NSStackView(views: [header, folderLabel, body, activity, status, footnote])
+        let stack = NSStackView(views: [header, folderLabel, scanOptions, body, activity, status, footnote])
         stack.orientation = .vertical; stack.alignment = .leading; stack.spacing = 12
         stack.translatesAutoresizingMaskIntoConstraints = false
         window.contentView!.addSubview(stack)
@@ -150,7 +173,7 @@ final class App: NSObject, NSApplicationDelegate, NSTableViewDataSource, NSTable
     func rebuildMenu() {
         guard let menu = statusItem.menu else { return }
         menu.removeAllItems()
-        let heading = NSMenuItem(title: busy ? "Đang quét…" : "Chọn kubeconfig → context", action: nil, keyEquivalent: "")
+        let heading = NSMenuItem(title: busy ? "Đang quét · \(scanChecked) file · \(configs.count) kubeconfig" : "Chọn kubeconfig → context", action: nil, keyEquivalent: "")
         menu.addItem(heading)
         if configs.isEmpty {
             menu.addItem(withTitle: "Chưa có kubeconfig — hãy chọn thư mục", action: nil, keyEquivalent: "")
@@ -182,6 +205,9 @@ final class App: NSObject, NSApplicationDelegate, NSTableViewDataSource, NSTable
         menu.addItem(withTitle: "Chọn thư mục…", action: #selector(chooseFolder), keyEquivalent: "").target = self
         let refresh = menu.addItem(withTitle: "Quét lại", action: #selector(rescan), keyEquivalent: "")
         refresh.target = self; refresh.isEnabled = folder != nil && !busy
+        if busy {
+            menu.addItem(withTitle: "Hủy quét", action: #selector(cancelScan), keyEquivalent: "").target = self
+        }
         menu.addItem(withTitle: "Mở cửa sổ KubeSwitch", action: #selector(showWindow), keyEquivalent: "").target = self
         menu.addItem(.separator())
         menu.addItem(withTitle: "Thoát", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
@@ -199,7 +225,7 @@ final class App: NSObject, NSApplicationDelegate, NSTableViewDataSource, NSTable
         guard !busy else { return }
         showWindow()
         let panel = NSOpenPanel(); panel.canChooseDirectories = true; panel.canChooseFiles = false
-        panel.prompt = "Quét thư mục này"; panel.message = "Quét cả thư mục con. Bỏ qua thư mục ẩn (trừ .kube), Library và node_modules."
+        panel.prompt = "Quét thư mục này"; panel.message = "Quét theo độ sâu đã chọn; mặc định 3 cấp thư mục con. Kết quả xuất hiện trong khi quét."
         if panel.runModal() == .OK, let url = panel.url {
             folder = url.path; UserDefaults.standard.set(url.path, forKey: "scanFolder"); rescan()
         }
@@ -214,31 +240,86 @@ final class App: NSObject, NSApplicationDelegate, NSTableViewDataSource, NSTable
         guard process.terminationStatus == 0 else { throw NSError(domain: "KubeSwitch", code: 1, userInfo: [NSLocalizedDescriptionKey: "Không đọc được cấu hình. Kiểm tra quyền truy cập và định dạng YAML."]) }
         return data
     }
+    @objc func depthChanged() {
+        UserDefaults.standard.set(depth.indexOfSelectedItem, forKey: "scanDepth")
+    }
+    @objc func cancelScan() {
+        guard busy, !scanCancelled, let process = scanProcess else { return }
+        scanCancelled = true; cancel.isEnabled = false
+        activity.stringValue = "Đang dừng quét…"
+        if process.isRunning { process.terminate() }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+            if self.scanProcess === process && process.isRunning { kill(process.processIdentifier, SIGKILL) }
+        }
+    }
+    func applicationWillTerminate(_ notification: Notification) {
+        if let process = scanProcess, process.isRunning { process.terminate() }
+    }
     @objc func rescan() {
         guard let folder = folder, !busy else { return }
         busy = true; scan.isEnabled = false; activate.isEnabled = false
-        folderLabel.stringValue = folder; status.stringValue = "Đang tìm kubeconfig trong thư mục đã chọn…"
+        depth.isEnabled = false; cancel.isHidden = false; cancel.isEnabled = true
+        spinner.startAnimation(nil)
+        scanCancelled = false; scanChecked = 0; scanSkipped = 0
+        configs = []; table.reloadData(); context.removeAllItems()
+        selectedName.stringValue = "Chọn một kubeconfig"
+        selectedPath.stringValue = "Kết quả sẽ xuất hiện ngay khi tìm thấy."
+        fileCount.stringValue = "KUBECONFIG · 0"
+        folderLabel.stringValue = folder; status.stringValue = "Ưu tiên file kubeconfig và YAML; có thể hủy bất kỳ lúc nào."
         activity.stringValue = "Đang quét…"; activity.textColor = .secondaryLabelColor
         rebuildMenu()
-        DispatchQueue.global(qos: .userInitiated).async {
-            let result = Result { try JSONDecoder().decode([Config].self, from: self.runHelper(["scan", folder])) }
-            DispatchQueue.main.async {
-                self.busy = false; self.scan.isEnabled = true
-                switch result {
-                case .success(let items):
-                    self.configs = items; self.table.reloadData(); self.context.removeAllItems()
-                    self.status.stringValue = items.isEmpty ? "Bấm Chọn thư mục… để tìm kubeconfig ở vị trí khác." : "Chọn file bên trái, rồi chọn context để kích hoạt."
-                    self.fileCount.stringValue = "KUBECONFIG · \(items.count)"
-                    self.activity.stringValue = items.isEmpty ? "Không tìm thấy kubeconfig" : "Sẵn sàng · \(items.count) cấu hình"
-                    self.activate.isEnabled = false
-                    self.selectedName.stringValue = "Chọn một kubeconfig"
-                    self.selectedPath.stringValue = "Các context sẽ xuất hiện tại đây."
-                    if !items.isEmpty { self.table.selectRowIndexes(IndexSet(integer: 0), byExtendingSelection: false) }
-                case .failure(let error): self.status.stringValue = error.localizedDescription
-                }
-                self.rebuildMenu()
-            }
+        let process = Process(); process.executableURL = URL(fileURLWithPath: "/usr/bin/ruby")
+        let levels = [1, 3, 6, -1]
+        process.arguments = [Bundle.main.resourcePath! + "/config.rb", "scan", folder, String(levels[depth.indexOfSelectedItem])]
+        let output = Pipe(); process.standardOutput = output; process.standardError = FileHandle.nullDevice
+        scanProcess = process
+        do { try process.run() } catch {
+            finishScan(success: false); return
         }
+        DispatchQueue.global(qos: .userInitiated).async {
+            var pending = Data()
+            while true {
+                let chunk = output.fileHandleForReading.availableData
+                if chunk.isEmpty { break }
+                pending.append(chunk)
+                var events: [ScanEvent] = []
+                while let newline = pending.firstIndex(of: 10) {
+                    let line = Data(pending[..<newline])
+                    pending.removeSubrange(...newline)
+                    if let event = try? JSONDecoder().decode(ScanEvent.self, from: line) { events.append(event) }
+                }
+                let batch = events
+                DispatchQueue.main.async { self.receiveScanEvents(batch) }
+            }
+            process.waitUntilExit()
+            DispatchQueue.main.async { self.finishScan(success: process.terminationStatus == 0) }
+        }
+    }
+    func receiveScanEvents(_ events: [ScanEvent]) {
+        guard busy, !scanCancelled else { return }
+        var added = false
+        for event in events {
+            if let item = event.config { configs.append(item); added = true }
+            if let count = event.checked { scanChecked = count }
+            if let count = event.skipped { scanSkipped = count }
+            if let path = event.path { status.stringValue = path }
+        }
+        activity.stringValue = "Đã kiểm tra \(scanChecked) file · \(configs.count) kubeconfig · bỏ qua \(scanSkipped) mục"
+        if added {
+            table.reloadData()
+            fileCount.stringValue = "KUBECONFIG · \(configs.count)"
+            if table.selectedRow < 0 && !configs.isEmpty { table.selectRowIndexes(IndexSet(integer: 0), byExtendingSelection: false) }
+        }
+    }
+    func finishScan(success: Bool) {
+        busy = false; scanProcess = nil; scan.isEnabled = true; depth.isEnabled = true
+        cancel.isHidden = true; spinner.stopAnimation(nil)
+        activate.isEnabled = configs.indices.contains(table.selectedRow)
+        let summary = "\(scanChecked) file · \(configs.count) kubeconfig · bỏ qua \(scanSkipped) mục"
+        activity.stringValue = (scanCancelled ? "Đã hủy · " : success ? "Hoàn tất · " : "Quét thất bại · ") + summary
+        activity.textColor = success || scanCancelled ? .secondaryLabelColor : .systemRed
+        status.stringValue = scanCancelled ? "Giữ lại các kết quả đã tìm thấy. Bạn có thể chọn thư mục khác hoặc quét lại." : success ? "Độ sâu có giới hạn có thể bỏ qua file nằm sâu hơn. Tăng độ sâu nếu thiếu cấu hình." : "Không đọc được thư mục. Kiểm tra quyền truy cập hoặc chọn thư mục khác."
+        rebuildMenu()
     }
     func numberOfRows(in tableView: NSTableView) -> Int { configs.count }
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {

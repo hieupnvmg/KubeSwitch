@@ -1,6 +1,5 @@
 require 'yaml'
 require 'json'
-require 'find'
 
 def read_config(path)
   raise 'File too large' if File.size(path) > 2_000_000
@@ -10,26 +9,72 @@ def read_config(path)
 end
 
 if ARGV[0] == 'scan'
-  found = []
-  Find.find(ARGV[1]) do |path|
-    if File.directory?(path)
-      Find.prune if path != ARGV[1] && (File.basename(path).start_with?('.') && File.basename(path) != '.kube' || ['node_modules', 'Library', 'Applications'].include?(File.basename(path)))
-      next
-    end
-    next unless File.file?(path) && !File.symlink?(path)
-    begin
-      next if File.size(path) > 2_000_000
-      head = File.read(path, 8192)
-      next unless head.include?('contexts:') && head.include?('clusters:')
-      data = read_config(path)
-      contexts = data['contexts'].map { |c| c['name'] }.select { |n| n.is_a?(String) }
-      next if contexts.empty?
-      found << {path: path, contexts: contexts, current: data['current-context']}
-    rescue StandardError
-      next
+  STDOUT.sync = true
+  root = File.expand_path(ARGV[1])
+  abort 'Invalid directory' unless File.directory?(root) && File.readable?(root)
+  max_depth = Integer(ARGV[2] || '3')
+  checked = 0
+  skipped = 0
+  found = 0
+  last_progress = 0.0
+  emit = lambda { |event| puts JSON.generate(event) }
+  progress = lambda do |path, force = false|
+    now = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+    if force || now - last_progress >= 0.15
+      emit.call(type: 'progress', checked: checked, skipped: skipped, found: found, path: path)
+      last_progress = now
     end
   end
-  puts JSON.generate(found.sort_by { |x| x[:path].downcase })
+  excluded = %w[node_modules Library Applications vendor Pods .git .cache .npm .gradle]
+  binary_extensions = %w[.png .jpg .jpeg .gif .webp .pdf .zip .gz .tar .dmg .mp4 .mp3 .mov .sqlite .db .woff .woff2 .ttf .icns .o .a .dylib .class .jar .pyc]
+  queue = [[root, 0]]
+  cursor = 0
+  while cursor < queue.length
+    directory, depth = queue[cursor]
+    cursor += 1
+    begin
+      entries = Dir.children(directory).sort_by { |name| [name.match?(/kube|config|\.ya?ml$/i) ? 0 : 1, name] }
+    rescue SystemCallError
+      skipped += 1
+      next
+    end
+    entries.each do |name|
+      path = File.join(directory, name)
+      progress.call(path)
+      begin
+        stat = File.lstat(path)
+        if stat.symlink?
+          skipped += 1
+        elsif stat.directory?
+          if (max_depth < 0 || depth < max_depth) && !excluded.include?(name) && (!name.start_with?('.') || name == '.kube')
+            queue << [path, depth + 1]
+          else
+            skipped += 1
+          end
+        elsif stat.file?
+          checked += 1
+          if stat.size > 2_000_000 || binary_extensions.include?(File.extname(name).downcase) || name.include?('.kubeswitch-backup-')
+            skipped += 1
+            next
+          end
+          text = File.binread(path, 2_000_001)
+          next if text.bytesize > 2_000_000
+          next if text.include?("\x00") || !text.include?('contexts:') || !text.include?('clusters:')
+          data = YAML.safe_load(text, [], [], false)
+          next unless data.is_a?(Hash) && data['contexts'].is_a?(Array) && data['clusters'].is_a?(Array)
+          contexts = data['contexts'].map { |c| c.is_a?(Hash) && c['name'].is_a?(String) ? c['name'] : nil }.compact
+          next if contexts.empty?
+          found += 1
+          current = data['current-context'].is_a?(String) ? data['current-context'] : nil
+          emit.call(type: 'config', config: {path: path, contexts: contexts, current: current})
+        end
+      rescue StandardError
+        skipped += 1
+      end
+    end
+  end
+  progress.call(root, true)
+  emit.call(type: 'done', checked: checked, skipped: skipped, found: found)
 elsif ARGV[0] == 'build'
   path, context = ARGV[1], ARGV[2]
   data = read_config(path)

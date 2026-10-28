@@ -3,3 +3,4 @@ KubeSwitch.app/
 dist/
 *.dmg
 *.zip
+__pycache__/

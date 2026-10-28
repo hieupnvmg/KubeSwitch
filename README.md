@@ -11,6 +11,14 @@ Giao diện gồm danh sách file bên trái và bảng chọn context bên ph�
 3. Chọn file trong danh sách, chọn context, bấm **Kích hoạt context**.
 4. kubectl và helm dùng ~/.kube/config sẽ sử dụng context đã chọn. Nếu terminal có biến KUBECONFIG, chạy `unset KUBECONFIG` trước.
 
+## Quét thư mục
+
+Mặc định quét file trong thư mục đã chọn và tối đa **3 cấp thư mục con**. Có thể chọn 1 cấp, 3 cấp, 6 cấp hoặc không giới hạn; bấm **Quét lại** để áp dụng. App ghi nhớ lựa chọn này.
+
+Kết quả xuất hiện ngay khi tìm thấy. Trong khi quét, app hiển thị số file đã kiểm tra, số kubeconfig tìm thấy, số mục bỏ qua và đường dẫn đang xử lý. Số mục bỏ qua gồm thư mục bị loại, symlink, file nhị phân/lớn và lỗi đọc hoặc YAML; đây không phải tỷ lệ phần trăm vì chưa biết tổng số file.
+
+Bấm **Hủy quét** trong cửa sổ hoặc menu bar để dừng và giữ lại kết quả đã tìm thấy. Khi quét hoàn tất hoặc đã hủy, có thể kích hoạt context trong các kết quả đó. Với thư mục lớn, nên bắt đầu ở độ sâu 1 hoặc 3 cấp và tăng nếu thiếu file.
+
 App ghi nhớ thư mục đã chọn. Bấm biểu tượng ⎈ trên menu bar → chọn kubeconfig → chọn context để kích hoạt trực tiếp, không cần mở cửa sổ. Menu bar cũng có nút chọn thư mục, quét lại và mở cửa sổ. Sau khi kích hoạt, tên context xuất hiện trên menu bar; đây là lần chọn gần nhất trong app, không tự theo dõi thay đổi từ công cụ khác.
 
 ## Cách chuyển cấu hình
@@ -21,7 +29,7 @@ Mỗi lần chuyển, cấu hình cũ được sao lưu ở ~/.kube/config.kubes
 
 App đọc cấu hình trên máy, không gọi cluster, không thực thi plugin xác thực và không gửi dữ liệu qua mạng. Khi dùng kubectl sau đó, kubectl có thể chạy plugin xác thực do kubeconfig chỉ định.
 
-Quét đệ quy, bỏ qua thư mục ẩn trừ .kube, Library, Applications và node_modules; bỏ qua symlink và file lớn hơn 2 MB. Chỉ nhận YAML có clusters và contexts trong 8 KB đầu. Dùng Ruby có sẵn tại /usr/bin/ruby để đọc YAML an toàn; YAML có alias hoặc kiểu dữ liệu đặc biệt sẽ bị bỏ qua.
+Quét theo từng cấp, ưu tiên tên file có kube/config hoặc đuôi YAML trong mỗi thư mục. Bỏ qua thư mục ẩn trừ .kube, Library, Applications, node_modules, vendor và Pods; bỏ qua symlink, bản sao lưu do app tạo, các đuôi file nhị phân phổ biến và file lớn hơn 2 MB. Đọc nội dung file còn lại trong giới hạn 2 MB, nên nhận được cả kubeconfig có clusters/contexts nằm sau 8 KB đầu. Dùng Ruby có sẵn tại /usr/bin/ruby để đọc YAML an toàn; YAML có alias hoặc kiểu dữ liệu đặc biệt sẽ bị bỏ qua.
 
 App được ký ad-hoc cục bộ, chưa được Apple notarize. Kiểm tra bằng `kubectl config current-context` sau khi kích hoạt. Chưa kiểm thử kết nối cluster thực tế.
 
@@ -34,3 +42,5 @@ bash build.sh
 ```
 
 Cần macOS và Xcode Command Line Tools. Script tạo app, ký ad-hoc và đóng gói DMG/ZIP trong dist/.
+
+Kiểm tra cơ chế quét bằng `python3 -m unittest -v test_scan.py` (cần Python 3). Bộ kiểm tra bao gồm giới hạn độ sâu, thư mục/file bị loại, YAML có trường nằm sau 8 KB đầu, tên Unicode, kết quả dạng stream, dừng tiến trình và lỗi thư mục không tồn tại.
