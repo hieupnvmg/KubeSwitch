@@ -1,8 +1,20 @@
-<?xml version="1.0" standalone="yes"?><!-- sparkle-sign-warning:
+<?xml version="1.0" standalone="yes"?>
+<!-- sparkle-sign-warning:
 IMPORTANT: This file was signed by Sparkle. Any modifications to this file requires re-signing this file with generate_appcast or sign_update! The signed signature will be embedded at the end of this file.
---><rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+-->
+<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
     <channel>
         <title>KubeSwitch</title>
+        <item>
+            <title>1.3.0</title>
+            <pubDate>Wed, 28 Oct 2026 12:05:36 +0700</pubDate>
+            <link>https://github.com/hieupnvmg/KubeSwitch</link>
+            <sparkle:version>4</sparkle:version>
+            <sparkle:shortVersionString>1.3.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <enclosure url="https://github.com/hieupnvmg/KubeSwitch/releases/download/v1.3.0/KubeSwitch-macOS.zip" length="1144199" type="application/octet-stream" sparkle:edSignature="CJiCsNUKbJUmsqXfUdXjCkgwFhbUXO5PUbwoQn3005q1PNczsV3mAlSJi4LsybJisqm/k/L8UQpw+Q4tDL9WDA=="/>
+        </item>
         <item>
             <title>1.2.0</title>
             <pubDate>Wed, 28 Oct 2026 11:59:12 +0700</pubDate>
@@ -11,10 +23,11 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
             <sparkle:shortVersionString>1.2.0</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <enclosure url="https://github.com/hieupnvmg/KubeSwitch/releases/download/v1.2.0/KubeSwitch-macOS.zip" length="1138555" type="application/octet-stream" sparkle:edSignature="W12qTkvKTGlnmltTIcKJ46c6/IdssrFxB7SAyEgCb7HfLL6a12eyiZIXDEzUMZvpbRpKZtCOvO9ig19AmplICQ=="></enclosure>
+            <enclosure url="https://github.com/hieupnvmg/KubeSwitch/releases/download/v1.2.0/KubeSwitch-macOS.zip" length="1138555" type="application/octet-stream" sparkle:edSignature="W12qTkvKTGlnmltTIcKJ46c6/IdssrFxB7SAyEgCb7HfLL6a12eyiZIXDEzUMZvpbRpKZtCOvO9ig19AmplICQ=="/>
         </item>
     </channel>
-</rss><!-- sparkle-signatures:
-edSignature: 74IazOJU512DmH57uIgki1lXttFnah/QmrhzzFMevQhq6hABYS0u0sFu0A/SNcoLNz+kSay+yFrQ8IjeT12ACg==
-length: 1192
+</rss>
+<!-- sparkle-signatures:
+edSignature: Bhr3Hb4uTNCk2iFxQNz+HczjqyFE4gDOERUA32nA/Zct4R96XC4E3dPI1NQAYnC+CNQ4BN1VzE40hPBblraQAg==
+length: 1934
 -->
