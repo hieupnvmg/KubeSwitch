@@ -67,9 +67,9 @@ final class App: NSObject, NSApplicationDelegate, NSTableViewDataSource, NSTable
         k9sButton.image = NSImage(systemSymbolName: "terminal", accessibilityDescription: nil)
         k9sButton.imagePosition = .imageLeading; k9sButton.isEnabled = false
         k9sButton.toolTip = "Mở Terminal chạy k9s với file và context đang chọn"
-        let icon = NSImageView(image: NSImage(systemSymbolName: "helm", accessibilityDescription: "KubeSwitch") ?? NSImage(systemSymbolName: "server.rack", accessibilityDescription: nil)!)
-        icon.contentTintColor = .controlAccentColor
-        icon.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 34, weight: .medium)
+        let icon = NSImageView(image: NSApp.applicationIconImage)
+        icon.imageScaling = .scaleProportionallyUpOrDown
+        icon.heightAnchor.constraint(equalToConstant: 48).isActive = true
         icon.widthAnchor.constraint(equalToConstant: 48).isActive = true
         let title = NSTextField(labelWithString: "KubeSwitch")
         title.font = .systemFont(ofSize: 27, weight: .bold)
@@ -159,7 +159,15 @@ final class App: NSObject, NSApplicationDelegate, NSTableViewDataSource, NSTable
             help.widthAnchor.constraint(equalTo: right.widthAnchor)
         ])
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        statusItem.button?.title = "⎈"
+        if let url = Bundle.main.url(forResource: "MenuLogo", withExtension: "png"),
+           let logo = NSImage(contentsOf: url) {
+            logo.size = NSSize(width: 20, height: 20)
+            logo.isTemplate = true
+            logo.accessibilityDescription = "KubeSwitch"
+            statusItem.button?.image = logo
+        } else {
+            statusItem.button?.title = "⎈"
+        }
         let menu = NSMenu()
         menu.addItem(withTitle: "Mở KubeSwitch", action: #selector(showWindow), keyEquivalent: "").target = self
         menu.addItem(withTitle: "Chọn thư mục…", action: #selector(chooseFolder), keyEquivalent: "").target = self
@@ -453,7 +461,6 @@ final class App: NSObject, NSApplicationDelegate, NSTableViewDataSource, NSTable
         let config = visibleConfigs[row]
         let cell = NSTableCellView()
         let icon = NSImageView(image: NSImage(systemSymbolName: "doc.text", accessibilityDescription: nil)!)
-        icon.contentTintColor = .controlAccentColor
         icon.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 20, weight: .regular)
         let name = NSTextField(labelWithString: URL(fileURLWithPath: config.path).lastPathComponent)
         name.font = .systemFont(ofSize: 13, weight: .semibold)

@@ -19,12 +19,16 @@ cp .dependencies/LICENSE "$APP/Contents/Resources/Sparkle-LICENSE.txt"
 rm -rf "$APP/Contents/Frameworks/Sparkle.framework"
 ditto .dependencies/Sparkle.framework "$APP/Contents/Frameworks/Sparkle.framework"
 swiftc -swift-version 5 -O -target arm64-apple-macosx13.0 main.swift Search.swift K9sLaunch.swift -o "$APP/Contents/MacOS/KubeSwitch" -framework Cocoa -F .dependencies -framework Sparkle -Xlinker -rpath -Xlinker @executable_path/../Frameworks
+STAGING=$(mktemp -d "${TMPDIR:-/tmp}/kubeswitch-dmg.XXXXXX")
+trap 'rm -rf "$STAGING"' EXIT
+swift artwork/Logo.swift "$STAGING"
+/usr/bin/iconutil -c icns "$STAGING/KubeSwitch.iconset" -o "$APP/Contents/Resources/KubeSwitch.icns"
+mv "$STAGING/MenuLogo.png" "$APP/Contents/Resources/MenuLogo.png"
+rm -r "$STAGING/KubeSwitch.iconset"
 # Preserve Sparkle's signed helper services; sign only our outer application.
 codesign --force --sign - "$APP"
 codesign --verify --deep --strict "$APP"
 
-STAGING=$(mktemp -d "${TMPDIR:-/tmp}/kubeswitch-dmg.XXXXXX")
-trap 'rm -rf "$STAGING"' EXIT
 ditto "$APP" "$STAGING/KubeSwitch.app"
 ln -s /Applications "$STAGING/Applications"
 hdiutil create -volname KubeSwitch -srcfolder "$STAGING" -ov -format UDZO dist/KubeSwitch-macOS.dmg
