@@ -514,7 +514,6 @@ final class App: NSObject, NSApplicationDelegate, NSTableViewDataSource, NSTable
             lastActivatedContext = selected
             lastActivatedPath = path
             activity.stringValue = "✓ Đã kích hoạt: \(selected)"; activity.textColor = .systemGreen
-            statusItem.button?.title = "⎈ " + (selected.count > 24 ? String(selected.prefix(21)) + "…" : selected)
             rebuildMenu()
         } catch {
             status.stringValue = "Lỗi: \(error.localizedDescription)"

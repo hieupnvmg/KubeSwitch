@@ -37,7 +37,7 @@ Kết quả xuất hiện ngay khi tìm thấy. Trong khi quét, app hiển th�
 
 Bấm **Hủy quét** trong cửa sổ hoặc menu bar để dừng và giữ lại kết quả đã tìm thấy. Khi quét hoàn tất hoặc đã hủy, có thể kích hoạt context trong các kết quả đó. Với thư mục lớn, nên bắt đầu ở độ sâu 1 hoặc 3 cấp và tăng nếu thiếu file.
 
-App ghi nhớ thư mục đã chọn. Bấm biểu tượng ⎈ trên menu bar → chọn kubeconfig → chọn context để kích hoạt trực tiếp, không cần mở cửa sổ. Menu bar cũng có nút chọn thư mục, quét lại và mở cửa sổ. Sau khi kích hoạt, tên context xuất hiện trên menu bar; đây là lần chọn gần nhất trong app, không tự theo dõi thay đổi từ công cụ khác.
+App ghi nhớ thư mục đã chọn. Bấm biểu tượng ⎈ trên menu bar → chọn kubeconfig → chọn context để kích hoạt trực tiếp, không cần mở cửa sổ. Menu bar cũng có nút chọn thư mục, quét lại và mở cửa sổ. Sau khi kích hoạt, tên context xuất hiện trong menu khi bấm biểu tượng ⎈; đây là lần chọn gần nhất trong app, không tự theo dõi thay đổi từ công cụ khác.
 
 ## Cập nhật OTA (từ 1.2.0)
 
