@@ -6,6 +6,16 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>KubeSwitch</title>
         <item>
+            <title>1.4.1</title>
+            <pubDate>Wed, 04 Nov 2026 07:59:40 +0700</pubDate>
+            <link>https://github.com/hieupnvmg/KubeSwitch</link>
+            <sparkle:version>6</sparkle:version>
+            <sparkle:shortVersionString>1.4.1</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <enclosure url="https://github.com/hieupnvmg/KubeSwitch/releases/download/v1.4.1/KubeSwitch-macOS.zip" length="1149183" type="application/octet-stream" sparkle:edSignature="ClJqiLH01moQT+uWTouPGOW97OoNtUQcmi4edGlilrsDvMVdBx1R9nsmyaB+spZSWf5J//aL/iYywTcDDhlmCw=="/>
+        </item>
+        <item>
             <title>1.4.0</title>
             <pubDate>Wed, 28 Oct 2026 15:28:30 +0700</pubDate>
             <link>https://github.com/hieupnvmg/KubeSwitch</link>
@@ -25,19 +35,9 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
             <enclosure url="https://github.com/hieupnvmg/KubeSwitch/releases/download/v1.3.0/KubeSwitch-macOS.zip" length="1144199" type="application/octet-stream" sparkle:edSignature="CJiCsNUKbJUmsqXfUdXjCkgwFhbUXO5PUbwoQn3005q1PNczsV3mAlSJi4LsybJisqm/k/L8UQpw+Q4tDL9WDA=="/>
         </item>
-        <item>
-            <title>1.2.0</title>
-            <pubDate>Wed, 28 Oct 2026 11:59:12 +0700</pubDate>
-            <link>https://github.com/hieupnvmg/KubeSwitch</link>
-            <sparkle:version>3</sparkle:version>
-            <sparkle:shortVersionString>1.2.0</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
-            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <enclosure url="https://github.com/hieupnvmg/KubeSwitch/releases/download/v1.2.0/KubeSwitch-macOS.zip" length="1138555" type="application/octet-stream" sparkle:edSignature="W12qTkvKTGlnmltTIcKJ46c6/IdssrFxB7SAyEgCb7HfLL6a12eyiZIXDEzUMZvpbRpKZtCOvO9ig19AmplICQ=="/>
-        </item>
     </channel>
 </rss>
 <!-- sparkle-signatures:
-edSignature: M8TjVlQ2QjI2CPrkw9JKyG4kxHttTJSokGwM81AJ20eOmEyw2XlUJlqiqZTF6I7u4pIsU3m0TvS5ziuyadrPCw==
+edSignature: oJGWyRBOX01IUqVY3i188njKCfoWlxf/tXScF+t8D33mppKznvqzGBuvqbKFGFkroRNXL9EaRHyoUOxwnaKcCw==
 length: 2684
 -->
